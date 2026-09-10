@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>复合系统</title>
+<style>
+  /* ========== 基础样式 ========== */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #000;
+    color: #fff;
+    font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif;
+    height: 100dvh;
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    /* 半透明背景层，方便后面叠加摄像头 */
+    background-color: #111; 
+  }
+
+  /* ========== 系统界面容器（半透明） ========== */
+  #system-ui {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    /* 半透明效果，如果你以后接入摄像头，这里可以调透明度 */
+    background: rgba(0, 0, 0, 0.7); 
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  /* 页面切换 */
+  .page { display: none; width: 100%; height: 100%; flex-direction: column; align-items: center; justify-content: center; }
+  .page.active { display: flex; }
+
+  /* ========== 老土花哨的UI动画 ========== */
+  @keyframes float {
+    0% { transform: translateY(0px); }
+    100% { transform: translateY(-10px); }
+  }
+  @keyframes glow {
+    0% { text-shadow: 0 0 5px #ff00ff, 0 0 10px #00ffff; }
+    50% { text-shadow: 0 0 20px #00ffff, 0 0 30px #ff00ff; }
+    100% { text-shadow: 0 0 5px #ff00ff, 0 0 10px #00ffff; }
+  }
+  .fancy-text {
+    animation: float 3s ease-in-out infinite alternate, glow 2s linear infinite;
+    font-weight: 900;
+    text-align: center;
+  }
+
+  /* ========== 用户协议页 ========== */
+  #page-agreement .protocol-box {
+    width: 80%;
+    height: 40%; /* 占据屏幕40% */
+    background: rgba(20, 20, 30, 0.8);
+    border: 2px solid #4a00e0;
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 30px;
+    overflow-y: scroll;
+    font-size: 14px;
+    line-height: 1.6;
+    color: #aaa;
+    /* 隐藏滚动条但保留滚动功能 */
+    scrollbar-width: none;
+  }
+  #page-agreement .protocol-box::-webkit-scrollbar { display: none; }
+
+  #page-agreement .btn-group {
+    display: flex;
+    gap: 20px;
+  }
+  .sys-btn {
+    padding: 12px 30px;
+    border: 2px solid #00ffff;
+    background: rgba(0, 255, 255, 0.1);
+    color: #00ffff;
+    font-size: 18px;
+    font-weight: bold;
+    cursor: pointer;
+    border-radius: 5px;
+    text-shadow: 0 0 5px #00ffff;
+    transition: all 0.2s;
+  }
+  .sys-btn:active { background: rgba(0, 255, 255, 0.4); }
+
+  /* ========== 三选一页面 ========== */
+  #page-options .option-list {
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+    align-items: center;
+    width: 90%;
+    max-width: 600px;
+  }
+  .option-item {
+    font-size: 20px;
+    padding: 20px;
+    width: 100%;
+    text-align: center;
+    border: 2px solid #ff00ff;
+    background: rgba(255, 0, 255, 0.1);
+    color: #fff;
+    cursor: pointer;
+    border-radius: 10px;
+    position: relative;
+    /* 老土花哨的字体 */
+    text-shadow: 0 0 10px #ff00ff;
+    transition: transform 0.1s;
+  }
+  .option-item:active { transform: scale(0.95); }
+
+  /* 韩文主文字样式 */
+  .option-item .kr {
+    font-size: 20px;
+    font-weight: 900;
+    display: block;
+    margin-bottom: 8px;
+  }
+  /* 中文小字样式 */
+  .option-item .cn {
+    font-size: 14px;
+    color: #ffccff;
+    opacity: 0.8;
+    display: block;
+  }
+
+  /* 隐藏的选项四（极度不起眼，错位排布） */
+  #hidden-option {
+    font-size: 4px; /* 极小 */
+    opacity: 0.05; /* 几乎透明 */
+    position: absolute;
+    bottom: 5px;
+    right: 10px;
+    color: #333;
+    cursor: pointer;
+    pointer-events: auto; /* 允许点击，但很难点到 */
+    z-index: 99;
+  }
+
+  /* ========== 大倒计时 ========== */
+  #big-countdown {
+    position: absolute;
+    font-size: 40px;
+    font-weight: 900;
+    color: #ff0000;
+    text-shadow: 0 0 20px #ff0000;
+    transition: all 0.5s ease;
+    z-index: 100;
+  }
+  /* 初始居中位置 */
+  #big-countdown.center { top: 30%; left: 50%; transform: translate(-50%, -50%); font-size: 60px; }
+  /* 移动到左上角位置 */
+  #big-countdown.top-left { top: 20px; left: 20px; font-size: 24px; }
+
+  /* ========== 花屏报错效果 ========== */
+  #glitch-layer {
+    display: none;
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 9999;
+    overflow: hidden;
+    background: #000;
+  }
+  .glitch-color {
+    position: absolute;
+    width: 100%; height: 100%;
+    mix-blend-mode: screen;
+    opacity: 0.6;
+  }
+  .glitch-black-block {
+    position: absolute;
+    background: #000;
+    opacity: 0.8;
+  }
+  .glitch-text {
+    position: absolute;
+    font-size: 24px;
+    font-weight: bold;
+    color: #ff0000;
+    text-shadow: 2px 2px #00ffff, -2px -2px #ff00ff;
+    white-space: nowrap;
+  }
+
+</style>
+</head>
+<body>
+
+<!-- 全局系统 UI 容器 -->
+<div id="system-ui">
+
+  <!-- 大倒计时 -->
+  <div id="big-countdown" class="center">倒计时：100！</div>
+
+  <!-- ===== 第一页：用户协议 ===== -->
+  <div id="page-agreement" class="page active">
+    <div class="protocol-box" id="protocol-text">
+      <!-- 韩文协议内容，用 JS 循环填充 -->
+    </div>
+    <div class="btn-group">
+      <button class="sys-btn" id="btn-agree">同意</button>
+      <button class="sys-btn" id="btn-disagree">不同意</button>
+    </div>
+  </div>
+
+  <!-- ===== 第二页：三大选项 ===== -->
+  <div id="page-options" class="page">
+    <div class="option-list">
+      <div class="option-item" onclick="triggerGlitch('mount')">
+        <span class="kr">옵션 1: 에베레스트 산을 올라 정상에 깃발을 꽂는다</span>
+        <span class="cn">选项一：攀登珠穆朗玛峰，登上最高点并插旗</span>
+      </div>
+      <div class="option-item" onclick="triggerGlitch('mars')">
+        <span class="kr">옵션 2: 화성에 착륙하여 작은 토마토 한 그루를 성공적으로 재배한다</span>
+        <span class="cn">选项二：登陆火星并成功培育一株小番茄</span>
+      </div>
+      <div class="option-item" onclick="selectMainOption()">
+        <span class="kr">옵션 3: 최연준을 공략하고 진심으로 재결합 엔딩을 달성한다</span>
+        <span class="cn">选项三：攻略崔然竣并和他达成真心复合结局</span>
+      </div>
+      <!-- 隐藏的选项四，没有 onclick，只是个陷阱 -->
+      <div id="hidden-option">
+        옵션 4: 최연준에게 라면을 끓여주자!
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ===== 花屏报错遮罩层（默认隐藏） ===== -->
+<div id="glitch-layer">
+  <!-- 颜色层 -->
+  <div class="glitch-color" style="background: #ff00ff;"></div>
+  <div class="glitch-color" style="background: #00ffff;"></div>
+  <div class="glitch-color" style="background: #ffff00;"></div>
+  <!-- 黑色几何图形层，用 JS 动态生成 -->
+  <div id="glitch-blocks"></div>
+  <!-- 报错文字，用 JS 动态生成 -->
+</div>
+
+<script>
+  // ==================== 全局状态 ====================
+  let bigCountdownValue = 100;
+  let countdownInterval = null;
+  let hasBeenReset = false; // 标记是否被重置过（重置后隐藏选项四消失）
+
+  // ==================== 用户协议逻辑（无限循环） ====================
+  const protocolBox = document.getElementById('protocol-text');
+  const protocolTextContent = `
+    본 시스템 이용약관은 이용자와 시스템 제공자 간의 권리와 의무를 규정합니다.
+    제1조 (목적) 본 약관은 복합 시스템(이하 "시스템")의 이용에 관한 조건 및 절차를 규정함을 목적으로 합니다.
+    제2조 (약관의 효력 및 변경) 본 약관은 시스템 화면에 게시함으로써 효력이 발생합니다.
+    제3조 (개인정보의 보호) 시스템은 이용자의 개인정보를 관련 법령에 따라 안전하게 보호합니다.
+    ... (이하 생략) ...
+    제4조 (시스템의 중단) 시스템은 점검, 교체, 고장 등의 사유로 서비스를 일시적으로 중단할 수 있습니다.
+    제5조 (이용자의 의무) 이용자는 시스템의 운영을 방해하는 행위를 하여서는 안 됩니다.
+    제6조 (책임의 제한) 시스템은 이용자가 시스템을 이용하여 얻은 결과에 대해 책임을 지지 않습니다.
+    제7조 (준용규정) 본 약관에 명시되지 않은 사항은 관련 법령 및 상관례에 따릅니다.
+    ... (약관은 계속해서 반복됩니다) ...
+  `;
+  // 循环填充，让文字足够长，实现“滑不到底”的错觉
+  for (let i = 0; i < 30; i++) {
+    protocolBox.innerHTML += protocolTextContent;
+  }
+  
+  // 滚动到底部时，自动跳回顶部（循环效果）
+  protocolBox.addEventListener('scroll', () => {
+    if (protocolBox.scrollTop + protocolBox.clientHeight >= protocolBox.scrollHeight - 50) {
+      // 等待一下，让用户感觉确实滑到底了，再无缝跳回
+      setTimeout(() => { protocolBox.scrollTop = 0; }, 100);
+    }
+  });
+
+  // 点击同意
+  document.getElementById('btn-agree').addEventListener('click', () => {
+    document.getElementById('page-agreement').classList.remove('active');
+    document.getElementById('page-options').classList.add('active');
+    // 倒计时移动到左上角
+    const cd = document.getElementById('big-countdown');
+    cd.classList.remove('center');
+    cd.classList.add('top-left');
+    startCountdown();
+  });
+
+  // 点击不同意（直接结束游戏，进入结局）
+  document.getElementById('btn-disagree').addEventListener('click', () => {
+    alert("已选择不同意。您将无法进入系统。（结局页面将在第二阶段开发）");
+    // 第二阶段这里接结局页面逻辑
+  });
+
+  // ==================== 大倒计时逻辑 ====================
+  function startCountdown() {
+    if (countdownInterval) clearInterval(countdownInterval);
+    countdownInterval = setInterval(() => {
+      // 随机减少 1-5
+      const decrease = Math.floor(Math.random() * 5) + 1;
+      bigCountdownValue -= decrease;
+      
+      const cd = document.getElementById('big-countdown');
+      cd.textContent = "倒计时：" + Math.max(0, bigCountdownValue) + "！";
+
+      // 触发提示（如果还未进入任务完成状态）
+      // 这里先简单打个日志，第二阶段再写UI弹窗
+      console.log(`[系统提示] 任务状态：均未完成！请继续加油！ (倒计时减了${decrease})`);
+
+      // 倒计时归零，触发花屏报错
+      if (bigCountdownValue <= 0) {
+        clearInterval(countdownInterval);
+        triggerGlitch('timeout');
+      }
+    }, 5000); // 注意：这里是5000毫秒=5秒，方便你测试。正式版请改成 60000（1分钟）
+  }
+
+  // ==================== 选项逻辑 ====================
+  function selectMainOption() {
+    // 选择了复合选项，进入下一阶段
+    alert("已选择复合。任务链页面将在第二阶段开发。");
+    // 第二阶段这里替换为任务链页面跳转
+  }
+
+  // ==================== 花屏报错效果 ====================
+  function triggerGlitch(reason) {
+    if (countdownInterval) clearInterval(countdownInterval);
+    
+    const glitchLayer = document.getElementById('glitch-layer');
+    glitchLayer.style.display = 'block';
+
+    const blocksContainer = document.getElementById('glitch-blocks');
+    blocksContainer.innerHTML = ''; // 清空旧元素
+
+    // 1. 生成随机黑色几何图形
+    const shapes = ['block', 'line-h', 'line-v', 'rect'];
+    for (let i = 0; i < 50; i++) {
+      const el = document.createElement('div');
+      el.className = 'glitch-black-block';
+      
+      const shapeType = shapes[Math.floor(Math.random() * shapes.length)];
+      const posX = Math.random() * 100;
+      const posY = Math.random() * 100;
+      
+      el.style.left = posX + '%';
+      el.style.top = posY + '%';
+
+      if (shapeType === 'block') {
+        el.style.width = (Math.random() * 30 + 5) + 'px';
+        el.style.height = (Math.random() * 30 + 5) + 'px';
+      } else if (shapeType === 'line-h') {
+        el.style.width = (Math.random() * 200 + 50) + 'px';
+        el.style.height = '2px';
+      } else if (shapeType === 'line-v') {
+        el.style.width = '2px';
+        el.style.height = (Math.random() * 200 + 50) + 'px';
+      } else if (shapeType === 'rect') {
+        el.style.width = (Math.random() * 150 + 50) + 'px';
+        el.style.height = (Math.random() * 20 + 5) + 'px';
+      }
+
+      blocksContainer.appendChild(el);
+    }
+
+    // 2. 生成跳脸报错文字
+    const errorTexts = ['ERROR！', 'WARNING！', '죄송합니다!', '아니.', '일어나.', '맞아.', '죄송합니다.'];
+    for (let i = 0; i < 15; i++) {
+      const txt = document.createElement('div');
+      txt.className = 'glitch-text';
+      txt.textContent = errorTexts[Math.floor(Math.random() * errorTexts.length)];
+      txt.style.left = (Math.random() * 80 + 10) + '%';
+      txt.style.top = (Math.random() * 80 + 10) + '%';
+      txt.style.fontSize = (Math.random() * 40 + 20) + 'px';
+      txt.style.transform = `rotate(${Math.random() * 40 - 20}deg)`;
+      glitchLayer.appendChild(txt);
+    }
+
+    // 3. 2秒后黑屏并重置
+    setTimeout(() => {
+      glitchLayer.style.display = 'none';
+      // 清空动态生成的元素
+      blocksContainer.innerHTML = '';
+      glitchLayer.querySelectorAll('.glitch-text').forEach(el => el.remove());
+
+      // 重置倒计时数值
+      bigCountdownValue = 100;
+      document.getElementById('big-countdown').textContent = "倒计时：100！";
+      document.getElementById('big-countdown').classList.remove('top-left');
+      document.getElementById('big-countdown').classList.add('center');
+
+      // 重置页面显示
+      document.getElementById('page-options').classList.remove('active');
+      document.getElementById('page-agreement').classList.add('active');
+
+      // 重置协议滚动条位置
+      protocolBox.scrollTop = 0;
+
+      // ⭐ 关键：如果被重置过，必须隐藏选项四
+      hasBeenReset = true;
+      document.getElementById('hidden-option').style.display = 'none';
+
+    }, 2000); // 2000毫秒 = 2秒
+  }
+
+  // 页面初始化：如果还没有被重置过，隐藏选项四显示；一旦被重置，就永远隐藏
+  // 注意：默认第一次加载是显示的（符合文章设定），被重置后消失
+  // 所以上面的 triggerGlitch 中的 hasBeenReset 逻辑要生效
+  // 默认这里不做处理，让它显示
+
+</script>
+
+</body>
+</html>
